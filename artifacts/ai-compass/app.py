@@ -377,7 +377,7 @@ def _dashboard():
     visible = frame
     if query.strip():
         mask = frame.astype(str).apply(
-            lambda column: column.str.contains(query.strip(), case=False, na=False)
+            lambda column: column.str.contains(query.strip(), case=False, na=False, regex=False)
         ).any(axis=1)
         visible = frame[mask]
     st.dataframe(visible, hide_index=True, use_container_width=True)
@@ -403,15 +403,19 @@ _initialize_state()
 with st.sidebar:
     st.title("AI Compass")
     st.caption("Opportunity discovery · v0.1")
-    page = st.radio(
+    destinations = ["Welcome", "Discovery Studio", "Opportunity Dashboard"]
+    if st.session_state.page in destinations:
+        st.session_state.navigation = st.session_state.page
+
+    def _navigate():
+        st.session_state.page = st.session_state.navigation
+
+    st.radio(
         "Navigate",
-        ["Welcome", "Discovery Studio", "Opportunity Dashboard"],
-        index=["Welcome", "Discovery Studio", "Opportunity Dashboard"].index(st.session_state.page)
-        if st.session_state.page in ["Welcome", "Discovery Studio", "Opportunity Dashboard"]
-        else 0,
+        destinations,
+        key="navigation",
+        on_change=_navigate,
     )
-    if page != st.session_state.page and page != "Assessment":
-        st.session_state.page = page
     st.markdown("---")
     st.caption("No external business-system connections. LLM is not required.")
 

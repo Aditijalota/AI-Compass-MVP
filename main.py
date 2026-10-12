@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import os
 
 
 if __name__ == "__main__":
@@ -13,9 +14,13 @@ if __name__ == "__main__":
             "run",
             "artifacts/ai-compass/app.py",
             "--server.port",
-            "5000",
+            os.environ.get("PORT", "5000"),
             "--server.address",
             "0.0.0.0",
+            "--server.headless",
+            "true",
+            "--browser.gatherUsageStats",
+            "false",
         ],
         check=True,
     )

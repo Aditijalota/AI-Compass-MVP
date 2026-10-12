@@ -33,7 +33,15 @@ def classify(discovery: dict, now: str, assessment_id: int | None = None) -> Ass
     tool_signals = ("crm", "spreadsheet", "ticket", "workflow", "assistant", "copilot", "automation")
     multi_step_signals = ("multiple systems", "across systems", "end to end", "end-to-end", "multi-step")
 
-    doc_heavy = _contains(data_text + " " + content, doc_signals)
+    # "Manual work" alone is not evidence of document handling.
+    doc_heavy = _contains(
+        data_text,
+        ("document", "pdf", "policy", "policies", "knowledge", "manuals", "guide", "email", "unstructured", "article"),
+    )
+    knowledge_lookup = doc_heavy and _contains(
+        problem + " " + str(discovery.get("desired_outcome", "")),
+        ("search", "lookup", "look up", "find answers", "find relevant", "guidance", "knowledge"),
+    )
     repetitive = _contains(content, repetitive_signals)
     human_review = _contains(rules_text + " " + exception_text, human_signals)
     existing_tools = _contains(tools_text, tool_signals)
@@ -43,7 +51,15 @@ def classify(discovery: dict, now: str, assessment_id: int | None = None) -> Ass
     explicitly_multi_step = _contains(content, multi_step_signals)
     candidate_for_agent = explicitly_multi_step and has_exceptions and human_review
 
-    if doc_heavy and repetitive:
+    if knowledge_lookup:
+        pattern = "RAG / knowledge assistant"
+        explanation = (
+            "The main need is finding answers in approved documents. First check whether an "
+            "existing approved search or AI tool can do this. If not, a retrieval-based "
+            "assistant grounded in maintained sources may fit; autonomous action is not needed."
+        )
+        alternatives = ["Existing software or AI assistant", "Process improvement", "Hybrid solution"]
+    elif doc_heavy and repetitive:
         pattern = "Hybrid solution"
         explanation = (
             "This combines recurring process work with document or knowledge handling. "

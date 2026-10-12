@@ -1,0 +1,1 @@
+- [Streamlit startup and routing](streamlit-startup.md) — onboarding can block startup; a running standalone workflow may still lack a shared-preview route.

@@ -1,0 +1,10 @@
+{
+  "name": "@workspace/ai-compass-preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cd ../.. && python main.py",
+    "typecheck": "cd ../.. && python -m py_compile main.py artifacts/ai-compass/app.py artifacts/ai-compass/classification.py artifacts/ai-compass/database.py artifacts/ai-compass/discovery.py artifacts/ai-compass/models.py artifacts/ai-compass/reports.py"
+  }
+}

@@ -7,7 +7,7 @@ AI Compass is a Streamlit prototype for discovering business-process opportuniti
 From the workspace root:
 
 ```bash
-streamlit run artifacts/ai-compass/app.py --server.port 5000 --server.address 0.0.0.0
+python main.py
 ```
 
 ## Try it

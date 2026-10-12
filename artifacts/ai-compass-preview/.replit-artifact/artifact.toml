@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AI Compass"
+description = "A Python and Streamlit prototype for discovering business-process opportunities and assessing proportionate technology solutions."
+version = "1.0.0"
+id = "artifacts/ai-compass-preview"
+router = "path"
+
+[[services]]
+name = "web"
+paths = ["/", "/_stcore/stream"]
+localPort = 19997
+
+[services.development]
+run = "cd ../.. && python main.py"
+
+[services.env]
+PORT = "19997"
+BASE_PATH = "/"
+
+[services.production.build]
+args = ["uv", "sync", "--frozen", "--project", "../.."]
+
+[services.production.build.env]
+UV_PROJECT_ENVIRONMENT = ".pythonlibs"
+
+[services.production.run]
+args = ["bash", "-c", "cd ../.. && .pythonlibs/bin/python main.py"]
+
+[services.production.health.startup]
+path = "/_stcore/health"

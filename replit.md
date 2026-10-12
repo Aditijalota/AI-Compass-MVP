@@ -4,7 +4,7 @@ AI Compass is a Streamlit prototype that helps individuals, managers, business o
 
 ## Run & Operate
 
-- Streamlit app: `streamlit run artifacts/ai-compass/app.py --server.port 5000 --server.address 0.0.0.0`
+- Streamlit app: `python main.py` — uses headless startup and the workflow-provided `PORT`, or port 5000 when run manually.
 - Python packages: `artifacts/ai-compass/requirements.txt`
 - Local prototype storage: `artifacts/ai-compass/data/ai_compass.db` (SQLite, created on first run)
 - No API key, external integration, or `DATABASE_URL` is required.
@@ -43,7 +43,7 @@ AI Compass is a Streamlit prototype that helps individuals, managers, business o
 
 ## Gotchas
 
-- The app has a standalone Streamlit workflow; it is not part of the existing React or API artifacts.
+- The app runs through the managed `artifacts/ai-compass-preview: web` workflow. Its preview registration is in `artifacts/ai-compass-preview/`; all application code remains Python/Streamlit.
 - The prompt limits v0.1 to fictional or authorized non-sensitive information and no external business-system integrations.
 
 ## Pointers
