@@ -1,12 +1,15 @@
 """SQLite persistence for prototype assessments and fictional demo records."""
 
 import json
+import copy
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from classification import classify
 from classification import effort_input_issues
+from classification import pilot_input_issues
+from models import PilotObservation
 from draft_state import snapshot
 
 DB_PATH = Path(__file__).parent / "data" / "ai_compass.db"
@@ -242,4 +245,28 @@ def update_effort_assumptions(assessment_id: int, assumptions: dict) -> None:
             "UPDATE assessments SET payload = ? WHERE id = ?",
             (json.dumps(payload, ensure_ascii=False), assessment_id),
         )
+
+
+def update_pilot_observation(assessment_id: int, observation: dict) -> None:
+    """Keep observed data separate and pin the scenario on the first pilot save."""
+    stored = {key: observation.get(key, default)
+              for key, default in PilotObservation().to_dict().items()}
+    _, errors = pilot_input_issues(stored)
+    if errors:
+        raise ValueError(" ".join(errors))
+    with _connect() as connection:
+        row = connection.execute("SELECT payload FROM assessments WHERE id = ?",
+                                 (assessment_id,)).fetchone()
+        if row is None:
+            raise ValueError("Assessment no longer exists.")
+        payload = json.loads(row["payload"])
+        previous = payload.get("pilot_observation") or {}
+        stored["scenario_assumptions"] = copy.deepcopy(
+            previous.get("scenario_assumptions", payload.get("effort_assumptions") or {}))
+        stored["scenario_captured_at"] = previous.get(
+            "scenario_captured_at", datetime.now(timezone.utc).isoformat())
+        stored["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        payload["pilot_observation"] = stored
+        connection.execute("UPDATE assessments SET payload = ? WHERE id = ?",
+                           (json.dumps(payload, ensure_ascii=False), assessment_id))
 

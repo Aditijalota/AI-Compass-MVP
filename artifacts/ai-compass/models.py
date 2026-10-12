@@ -19,6 +19,32 @@ EFFORT_RANGES = {
     "implementation_hours": ("One-time implementation person-hours", None),
 }
 
+PILOT_NUMBERS = {
+    "baseline_hours": ("Observed baseline person-hours per week", None),
+    "adoption_percent": ("Observed share of baseline work using the solution (%)", 100.0),
+    "work_hours": ("Observed weekly work person-hours, excluding additional review overhead", None),
+    "review_hours": ("Observed additional weekly review, rework and maintenance person-hours", None),
+}
+QUALITY_OUTCOMES = ["Not measured", "Improved", "Unchanged", "Worse", "Mixed"]
+
+
+@dataclass
+class PilotObservation:
+    scope: str = ""
+    observation_period: str = ""
+    measurement_notes: str = ""
+    same_scope: bool = False
+    baseline_hours: float | None = None
+    adoption_percent: float | None = None
+    work_hours: float | None = None
+    review_hours: float | None = None
+    quality_outcome: str = "Not measured"
+    quality_notes: str = ""
+    confirmed: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
 
 @dataclass
 class EffortAssumptions:
@@ -58,6 +84,7 @@ class Assessment:
     discovery: dict[str, Any]
     is_example: bool = False
     effort_assumptions: dict[str, Any] = field(default_factory=lambda: EffortAssumptions().to_dict())
+    pilot_observation: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

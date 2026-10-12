@@ -1,12 +1,13 @@
 """Streamlit controls for explicit effort assumptions and opportunity comparison."""
 
 import pandas as pd
+import sqlite3
 import streamlit as st
 
-from classification import estimate_opportunity
-from database import get_assessment, update_effort_assumptions
-from models import EffortAssumptions, EFFORT_RANGES, READINESS_CHECKS, READINESS_STATES
-from reports import comparison_row, hours_range
+from classification import estimate_opportunity, evaluate_pilot
+from database import get_assessment, update_effort_assumptions, update_pilot_observation
+from models import EffortAssumptions, EFFORT_RANGES, READINESS_CHECKS, READINESS_STATES, PilotObservation, PILOT_NUMBERS, QUALITY_OUTCOMES
+from reports import comparison_row, hours_range, observed_hours
 
 
 def render_effort_assumptions(assessment: dict):
@@ -84,9 +85,78 @@ def render_effort_assumptions(assessment: dict):
                     st.rerun()
 
 
+def render_pilot_observation(assessment: dict):
+    st.markdown("### Pilot observations versus preliminary scenario")
+    pilot = assessment.get("pilot_observation") or PilotObservation().to_dict()
+    result = evaluate_pilot(assessment)
+    st.write(f"**Observed outcome:** {result['status']}")
+    left, right = st.columns(2)
+    left.metric("Observed total weekly effort", observed_hours(result["net_effort_hours_per_week"]))
+    right.metric("Observed net weekly savings", observed_hours(result["net_savings_hours_per_week"]))
+    st.write("Saved preliminary savings range: " + hours_range(result["scenario_net_hours_per_week"]))
+    st.write(result["comparison"])
+    st.caption(result["method"])
+    st.write(f"Quality outcome: {result['quality_outcome']}")
+    if result["quality_outcome"] in ("Worse", "Mixed", "Not measured"):
+        st.warning("Time savings alone do not establish a successful pilot; review the quality evidence.")
+    st.caption(result["caveat"])
+    if assessment.get("pilot_observation"):
+        if result["missing_inputs"]:
+            st.info("Missing or unconfirmed pilot inputs: " + "; ".join(result["missing_inputs"]))
+        if result["input_errors"]:
+            st.error("; ".join(result["input_errors"]))
+        with st.expander("Recorded pilot evidence and saved scenario"):
+            st.json(pilot)
+    with st.expander("Record or edit pilot observations"):
+        st.write("Use weekly averages for the same people, tasks and workload. Include effort on "
+                 "work not using the solution. Do not count review or rework twice.")
+        st.caption("Blank means unknown; zero is valid. Drafts can be saved. "
+                   "The first save captures the current preliminary assumptions separately; "
+                   "later estimate or pilot edits do not replace that saved scenario.")
+        scenario = pilot.get("scenario_assumptions", assessment.get("effort_assumptions") or {})
+        st.write("Scenario scope: " + (scenario.get("scope") or "Not provided"))
+        with st.form(f"pilot_{assessment['id']}"):
+            values = {}
+            for key, label in (
+                ("scope", "Observed scope: people, tasks and workload"),
+                ("observation_period", "Observation period: baseline and pilot dates / weeks"),
+                ("measurement_notes", "Measurement method and evidence"),
+            ):
+                values[key] = st.text_area(label, value=pilot.get(key, ""),
+                                          key=f"{assessment['id']}_pilot_{key}")
+            values["same_scope"] = st.checkbox(
+                "Baseline and pilot cover the saved scenario's same people, tasks and comparable weekly workload.",
+                value=pilot.get("same_scope", False), key=f"{assessment['id']}_pilot_same_scope")
+            for key, (label, maximum) in PILOT_NUMBERS.items():
+                current = pilot.get(key)
+                values[key] = st.number_input(
+                    label, min_value=0.0, max_value=maximum,
+                    value=float(current) if current is not None else None,
+                    key=f"{assessment['id']}_pilot_{key}")
+            values["quality_outcome"] = st.selectbox(
+                "Observed quality outcome", QUALITY_OUTCOMES,
+                index=QUALITY_OUTCOMES.index(pilot.get("quality_outcome", "Not measured")),
+                key=f"{assessment['id']}_pilot_quality_outcome")
+            values["quality_notes"] = st.text_area(
+                "Quality evidence: baseline versus pilot errors, exceptions or acceptance; note if not measured",
+                value=pilot.get("quality_notes", ""), key=f"{assessment['id']}_pilot_quality_notes")
+            values["confirmed"] = st.checkbox(
+                "I confirm these are recorded observations, including any zero savings or increased effort.",
+                value=False,
+                key=f"{assessment['id']}_pilot_confirm_{pilot.get('recorded_at') or 'draft'}")
+            if st.form_submit_button("Save pilot observations", type="primary"):
+                try:
+                    update_pilot_observation(assessment["id"], values)
+                except (ValueError, sqlite3.Error) as error:
+                    st.error("Pilot observations were not saved. " + str(error))
+                else:
+                    st.session_state.assessment = get_assessment(assessment["id"])
+                    st.rerun()
+
+
 def render_comparison(assessments: list[dict]):
     st.markdown("### Compare readiness and effort savings")
-    st.caption("All results are preliminary. Missing assumptions are shown, not treated as zero. "
+    st.caption("Scenarios are preliminary; pilot observations are shown separately, not guaranteed ROI. Missing assumptions are shown, not treated as zero. "
                "Different baseline scopes are not directly comparable; estimates may overlap and must not be summed.")
     options = {item["id"]: item for item in assessments}
     selected = st.multiselect(

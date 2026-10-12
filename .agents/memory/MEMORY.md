@@ -1,3 +1,4 @@
 - [Streamlit startup and routing](streamlit-startup.md) — onboarding can block startup; a running standalone workflow may still lack a shared-preview route.
 - [AI provisioning availability](ai-provisioning.md) — a missing setup action in a task runtime is not evidence that managed AI access is unavailable platform-wide.
 - [Opportunity estimates](opportunity-estimates.md) — scenario confirmation is not measured savings or pilot approval; readiness and effort scenarios remain distinct.
+- [Pilot comparisons](pilot-comparison.md) — compare observations against a fixed scenario; adoption does not multiply measured effort, and zero or negative savings remain valid.

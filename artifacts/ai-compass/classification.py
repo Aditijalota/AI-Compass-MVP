@@ -2,7 +2,7 @@
 
 import math
 
-from models import Assessment, EFFORT_RANGES, READINESS_CHECKS, READINESS_STATES
+from models import Assessment, EFFORT_RANGES, READINESS_CHECKS, READINESS_STATES, PILOT_NUMBERS, QUALITY_OUTCOMES
 
 
 ESTIMATE_METHOD = (
@@ -121,6 +121,81 @@ def estimate_opportunity(assessment: dict) -> dict:
 def _contains(text: str, phrases: tuple[str, ...]) -> bool:
     text = text.lower()
     return any(phrase in text for phrase in phrases)
+
+
+PILOT_CAVEAT = (
+    "User-recorded pilot observations, not guaranteed ROI or proof of causation. "
+    "Weekly effort includes all work in the observed scope, including work not using "
+    "the solution, plus additional review, rework and maintenance. Adoption is descriptive, "
+    "not a multiplier. One-time implementation effort is excluded. Quality must be considered "
+    "alongside time; results are not extrapolated to a wider rollout."
+)
+PILOT_METHOD = (
+    "Observed total weekly effort = weekly work hours + additional review/rework/maintenance hours. "
+    "Observed net weekly savings = observed baseline hours − observed total weekly effort. "
+    "Zero means no time saved; negative savings mean additional effort."
+)
+
+
+def pilot_input_issues(pilot: dict) -> tuple[list[str], list[str]]:
+    missing, errors = [], []
+    for key, (label, maximum) in PILOT_NUMBERS.items():
+        value = pilot.get(key)
+        if value is None:
+            missing.append(label)
+        elif (isinstance(value, bool) or not isinstance(value, (int, float))
+              or not math.isfinite(value) or value < 0
+              or (maximum is not None and value > maximum)):
+            errors.append(f"{label}: provide a finite non-negative number"
+                          + (" at most 100%." if maximum else "."))
+    for key in ("scope", "observation_period", "measurement_notes", "quality_notes"):
+        value = pilot.get(key, "")
+        if not isinstance(value, str):
+            errors.append(f"{key}: provide text.")
+        elif not value.strip():
+            missing.append(key.replace("_", " ").capitalize())
+    if pilot.get("quality_outcome", "Not measured") not in QUALITY_OUTCOMES:
+        errors.append("Invalid quality outcome.")
+    for key in ("same_scope", "confirmed"):
+        if key in pilot and not isinstance(pilot[key], bool):
+            errors.append(f"{key}: provide a yes/no value.")
+    if pilot.get("confirmed") is not True:
+        missing.append("Confirmation of recorded observations")
+    return missing, errors
+
+
+def evaluate_pilot(assessment: dict) -> dict:
+    pilot = assessment.get("pilot_observation") or {}
+    missing, errors = pilot_input_issues(pilot)
+    scenario = estimate_opportunity({"effort_assumptions": pilot.get("scenario_assumptions") or {}})
+    result = {
+        "status": "Not recorded" if not pilot else "Incomplete or unconfirmed",
+        "missing_inputs": missing, "input_errors": errors,
+        "net_effort_hours_per_week": None, "net_savings_hours_per_week": None,
+        "scenario_net_hours_per_week": scenario["net_hours_per_week"],
+        "comparison": "Not compared — complete and confirm pilot observations first.",
+        "quality_outcome": pilot.get("quality_outcome", "Not measured"),
+        "method": PILOT_METHOD,
+        "caveat": PILOT_CAVEAT,
+    }
+    if missing or errors:
+        return result
+    total = pilot["work_hours"] + pilot["review_hours"]
+    savings = pilot["baseline_hours"] - total
+    if not math.isfinite(total) or not math.isfinite(savings):
+        result["input_errors"].append("Observed values are too large to calculate finite effort.")
+        return result
+    result.update(net_effort_hours_per_week=total, net_savings_hours_per_week=savings,
+                  status="Time saved" if savings > 0 else "No time saved" if savings == 0 else "Additional effort")
+    bounds = scenario["net_hours_per_week"]
+    if not pilot.get("same_scope"):
+        result["comparison"] = "Not comparable — matching scope/workload has not been confirmed."
+    elif bounds is None:
+        result["comparison"] = "Not compared — saved preliminary scenario is missing or unconfirmed."
+    else:
+        position = "Below" if savings < bounds[0] else "Above" if savings > bounds[1] else "Within"
+        result["comparison"] = f"{position} the saved preliminary savings range (not a confidence interval)."
+    return result
 
 
 def classify(discovery: dict, now: str, assessment_id: int | None = None) -> Assessment:

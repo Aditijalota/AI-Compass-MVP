@@ -16,7 +16,7 @@ from draft_state import empty_draft, restore_state
 from demo_examples import DEMOS
 from llm_demo import AIUnavailable, MODEL, configured, opportunities, assessment_insight
 from reports import assessment_as_json, assessment_as_text
-from comparison_ui import render_comparison, render_effort_assumptions
+from comparison_ui import render_comparison, render_effort_assumptions, render_pilot_observation
 from discovery import (
     AI_MODEL, DEPARTMENTS, MAX_INPUT_CHARS, QUESTIONS, SCALES,
     ai_available, discovery_prompt, prompt_cache_key, suggested_opportunities,
@@ -528,6 +528,7 @@ def _assessment_detail(assessment: dict):
         _bullet_section("Readiness concerns", assessment.get("readiness_concerns", []))
     _bullet_section("Recommended next steps", assessment.get("next_steps", []))
     render_effort_assumptions(assessment)
+    render_pilot_observation(assessment)
     st.markdown("---")
     st.caption("Validate with process owners before making technical, operational, or investment decisions.")
     text_col, json_col = st.columns(2)
