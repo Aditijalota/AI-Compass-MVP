@@ -1,0 +1,133 @@
+# Project: AI Compass v0.1
+
+Act as a senior Python developer, AI product engineer, and solution architect.
+
+Build a working Streamlit web application called **AI Compass: AI Opportunity Discovery & Assessment Platform**.
+
+I am a beginner learning vibe coding. Build a simple but functional MVP that can evolve into a consulting platform over six weeks.
+
+## Purpose
+
+Help individuals, department managers, business owners, and consultants discover AI opportunities, understand their business processes, and evaluate the most appropriate technology approach.
+
+## Technology stack
+
+- Python
+- Streamlit for the interface
+- SQLite for prototype assessment storage
+- Pandas for dashboard analytics
+- Optional LLM integration for conversational discovery
+- Replit for development and deployment
+
+Do not use React, Next.js, or a separate frontend/backend architecture.
+
+## Page 1: Welcome
+
+Create a professional homepage with three selectable pathways:
+
+1. **I have a business problem:** Describe an existing problem or inefficient process.
+2. **Explore my department:** Choose Finance, HR, Sales, Marketing, Operations, IT, Customer Service, or Other to discover opportunities.
+3. **I'm new to AI:** Describe a role and daily responsibilities to identify potential AI productivity opportunities.
+
+All pathways should connect to a shared discovery workflow.
+
+## Page 2: Discovery Studio
+
+Build a conversational-style interface.
+
+Ask guided, context-sensitive questions to understand:
+
+- Business problem or desired outcome
+- Department and role
+- Current problem scale: individual, department, or organization
+- Intended future rollout scale
+- Daily activities or current process
+- Existing business tools and systems
+- Manual work and repetitive tasks
+- Data and document types
+- Rules, approvals, exceptions, and human decisions
+- Business impact and estimated time spent
+- Security and data sensitivity concerns
+
+For users without a known problem, first suggest three relevant opportunities based on their role or department. Let them select one for assessment.
+
+Use approximately 5–7 discovery exchanges. Allow users to continue discovery or generate a preliminary assessment.
+
+If no LLM API is configured, provide a fully functional guided-question fallback. Do not make the entire application dependent on the LLM.
+
+## Page 3: Solution Fit Assessment
+
+Create an explainable recommendation engine using Python rules.
+
+Classify the primary solution pattern as:
+
+- Process improvement
+- Existing software or AI assistant
+- Rule-based automation
+- AI-assisted automation
+- RAG / knowledge assistant
+- Agentic AI candidate
+- Hybrid solution
+
+Provide:
+- Recommended pattern
+- Explanation
+- Alternative approaches
+- Current and intended scale
+- Potential benefits
+- Missing information
+- Readiness concerns
+- Recommended next steps
+
+Do not recommend custom AI or agentic solutions when existing software or simpler automation would suffice.
+
+Clearly mark results as preliminary and requiring validation.
+
+## Page 4: Opportunity Dashboard
+
+Store completed assessments and show:
+
+- Total opportunities discovered
+- Opportunities by department
+- Opportunities by problem scale
+- Opportunities by recommended solution type
+- Searchable assessment table
+- Ability to reopen an assessment
+
+Provide three clearly labeled fictional example assessments.
+
+## Architecture
+
+Use separate modules for:
+
+- UI
+- Discovery logic
+- Classification logic
+- Data models
+- Database operations
+- Reports
+
+Use simple, understandable code with comments.
+
+Include a requirements.txt file and Replit run configuration.
+
+## Security
+
+Do not hardcode API keys. Do not collect real client confidential information. Do not integrate with external business systems.
+
+For v0.1, this is a controlled prototype using fictional or authorized non-sensitive information.
+
+## Build order
+
+1. Create the Streamlit interface.
+2. Make all three discovery pathways functional.
+3. Implement guided questions and solution classification.
+4. Save assessments.
+5. Build the dashboard.
+6. Add optional LLM integration only after the core app works.
+
+Keep the application extensible for future modules covering process mapping, readiness scoring, ROI, 30/60/90-day roadmaps, and agentic workflow development.
+
+**Do not publish automatically.**
+
+Build the first working preview and explain what files you created and how to test the application.

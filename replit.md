@@ -1,45 +1,51 @@
-# [Project name]
+# AI Compass
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+AI Compass is a Streamlit prototype that helps individuals, managers, business owners, and consultants discover process-improvement opportunities and compare them with proportionate software, automation, or AI patterns.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Streamlit app: `streamlit run artifacts/ai-compass/app.py --server.port 5000 --server.address 0.0.0.0`
+- Python packages: `artifacts/ai-compass/requirements.txt`
+- Local prototype storage: `artifacts/ai-compass/data/ai_compass.db` (SQLite, created on first run)
+- No API key, external integration, or `DATABASE_URL` is required.
+- Existing workspace tooling: `pnpm run typecheck`
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Python, Streamlit, Pandas, and SQLite for the AI Compass prototype.
+- The workspace also contains shared pnpm/TypeScript API and design-sandbox artifacts.
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/ai-compass/app.py` — Streamlit pages and user interactions.
+- `artifacts/ai-compass/discovery.py` — guided prompts and opportunity suggestions.
+- `artifacts/ai-compass/classification.py` — explainable solution-fit rules.
+- `artifacts/ai-compass/database.py` — SQLite schema, example data, and persistence.
+- `artifacts/ai-compass/models.py` — assessment data model.
+- `artifacts/ai-compass/reports.py` — assessment text and JSON exports.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The MVP follows the requested Python/Streamlit stack and keeps UI, discovery, classification, persistence, and reporting in separate modules.
+- Recommendations use local, deterministic rules; an LLM is deliberately not required.
+- SQLite is local prototype storage and should not be treated as a multi-user production database.
+- Fictional sample records are included; users should not enter confidential or personal data.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Three intake pathways share a six-exchange discovery workflow.
+- Each assessment explains its recommendation, alternatives, expected benefits, missing inputs, readiness concerns, and next steps.
+- The dashboard offers grouped counts, search, and assessment reopening.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- The user asked for a working Streamlit MVP and explicitly said not to publish automatically.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The app has a standalone Streamlit workflow; it is not part of the existing React or API artifacts.
+- The prompt limits v0.1 to fictional or authorized non-sensitive information and no external business-system integrations.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See `artifacts/ai-compass/README.md` for local run and smoke-test steps.
