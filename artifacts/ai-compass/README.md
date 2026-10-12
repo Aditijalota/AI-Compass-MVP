@@ -68,6 +68,20 @@ Live model access requires Replit-managed configuration in the running app. Offl
 ```bash
 python -m unittest discover -s artifacts/ai-compass/tests -v
 ```
+
+To explicitly run one billed, fictional-data smoke test through Discovery Studio
+with the real managed provider (not a mocked SDK):
+
+```bash
+RUN_DISCOVERY_LIVE_SMOKE=1 python -m unittest discover -s artifacts/ai-compass/tests -p test_discovery_live.py -v
+```
+
+This test uses temporary SQLite storage and requires managed configuration.
+It checks both opt-ins, the model-selected label and reviewed question, reuse on
+reruns and toggles, consent reset, and an injected failure with explicitly labeled
+guided fallback. Only the first selection makes a real provider request. Normal
+test runs skip this billed check; a provider failure fails the live smoke test
+rather than counting guided fallback as live success.
 ## Record a demo
 
 In the sidebar, expand **Fictional demos for recording**. Load each of the three examples, complete the normal intake, and submit each exchange. Answers are prefilled but editable. Enable the relevant AI options and confirm non-sensitive inputs if you want live AI assistance; otherwise demos work locally. Discovery AI only receives saved intake and previous exchanges, not unsaved demo fields.

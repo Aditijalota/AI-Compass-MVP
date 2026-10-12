@@ -185,6 +185,19 @@ class DiscoveryUITests(unittest.TestCase):
         self.assertFalse(self.app.session_state.ai_authorized)
         self.assertEqual(self.model.call_count, 1)
 
+    def test_failure_is_labeled_guided_and_cached_without_provider_details(self):
+        self.start()
+        self.model.side_effect = TimeoutError("sensitive provider details")
+        self.app.checkbox(key="ai_authorized").check().run()
+        self.app.toggle(key="ai_discovery").set_value(True).run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.model.call_count, 1)
+        self.assertTrue(any("AI question selection failed" in item.value for item in self.app.warning))
+        self.assertTrue(any("no model used for this question" in item.value for item in self.app.caption))
+        self.assertFalse(any("sensitive provider details" in item.value for item in self.app.warning))
+        self.app.run()
+        self.assertEqual(self.model.call_count, 1)
+
     def test_incoming_demo_prefills_work_for_all_three_paths(self):
         from demo_examples import DEMOS
         for path, example in DEMOS.items():
