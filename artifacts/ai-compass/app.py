@@ -1,12 +1,18 @@
 """AI Compass: a small, explainable AI opportunity discovery prototype."""
 
 from datetime import datetime, timezone
+import sqlite3
 
 import pandas as pd
 import streamlit as st
 
 from classification import classify
 from database import get_assessment, initialize_database, list_assessments, save_assessment
+from database import (
+    save_discovery_draft, list_discovery_drafts, get_discovery_draft,
+    discard_discovery_draft,
+)
+from draft_state import empty_draft, restore_state
 from demo_examples import DEMOS
 from llm_demo import AIUnavailable, MODEL, configured, opportunities, assessment_insight
 from reports import assessment_as_json, assessment_as_text
@@ -20,26 +26,7 @@ st.set_page_config(page_title="AI Compass", layout="wide")
 
 
 def _empty_draft():
-    return {
-        "intake_path": "",
-        "department": "Other",
-        "role": "",
-        "problem_scale": "Individual",
-        "rollout_scale": "Department",
-        "business_problem": "",
-        "desired_outcome": "",
-        "activities": "",
-        "manual_work": "",
-        "frequency": "",
-        "tools": "",
-        "data_types": "",
-        "rules": "",
-        "exceptions": "",
-        "time_spent": "",
-        "business_impact": "",
-        "security_concerns": "",
-        "constraints": "",
-    }
+    return empty_draft()
 
 
 def _initialize_state():
@@ -53,6 +40,8 @@ def _initialize_state():
         "discovery_prompts": {},
         "saved_exchanges": set(),
         "demo_path": None,
+        "active_draft_id": None,
+        "draft_storage_authorized": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -60,6 +49,11 @@ def _initialize_state():
 
 
 def _begin_discovery(path: str, department: str, role: str, problem: str = "", activities: str = ""):
+    for key in list(st.session_state):
+        if key.startswith("step_"):
+            del st.session_state[key]
+    st.session_state.active_draft_id = None
+    st.session_state.draft_storage_authorized = False
     draft = _empty_draft()
     draft.update({
         "intake_path": path,
@@ -67,6 +61,8 @@ def _begin_discovery(path: str, department: str, role: str, problem: str = "", a
         "role": role.strip(),
         "business_problem": problem.strip(),
         "activities": activities.strip(),
+        "problem_scale": _demo().get("problem_scale", draft["problem_scale"]),
+        "rollout_scale": _demo().get("rollout_scale", draft["rollout_scale"]),
     })
     st.session_state.draft = draft
     st.session_state.step = 0
@@ -79,6 +75,61 @@ def _begin_discovery(path: str, department: str, role: str, problem: str = "", a
     st.session_state.ai_discovery = False
     st.session_state.ai_authorized = False
     st.rerun()
+
+
+def _resume_draft(draft_id):
+    try:
+        restore_state(st.session_state, get_discovery_draft(draft_id))
+        st.session_state.draft_notice = "Draft resumed. AI is off; opt in and confirm inputs again before using any AI feature."
+    except (sqlite3.Error, ValueError, KeyError, TypeError) as error:
+        st.session_state.draft_error = f"Could not resume draft: {error}"
+
+
+def _discard_draft(draft_id):
+    try:
+        discard_discovery_draft(draft_id)
+        if st.session_state.active_draft_id == draft_id:
+            st.session_state.active_draft_id = None
+        st.session_state.draft_notice = "Saved draft deleted. Any answers currently open in this session are unchanged."
+        st.session_state.discard_draft_confirm = False
+    except sqlite3.Error as error:
+        st.session_state.draft_error = f"Could not discard draft: {error}"
+
+
+def _draft_controls():
+    with st.expander("Resume or discard a saved draft"):
+        st.warning(
+            "Shared prototype storage, not private user storage: anyone with access to this "
+            "app can resume or delete these drafts. Save fictional or authorized non-sensitive "
+            "information only. Do not save personal, client-sensitive, or confidential data."
+        )
+        st.caption(
+            "Resume replaces the discovery open in this session; save it first if needed. "
+            "Only explicitly saved answers and progress survive a lost session. AI consent is never stored."
+        )
+        try:
+            drafts = list_discovery_drafts()
+        except sqlite3.Error as error:
+            st.error(f"Could not load saved drafts: {error}")
+            return
+        if not drafts:
+            st.caption("No saved discovery drafts yet.")
+            return
+        labels = {f"Draft #{item['id']} · saved {item['updated_at']}": item["id"] for item in drafts}
+        def _reset_discard_confirmation():
+            st.session_state.discard_draft_confirm = False
+
+        selected = st.selectbox(
+            "Saved discovery draft", list(labels),
+            on_change=_reset_discard_confirmation,
+        )
+        draft_id = labels[selected]
+        st.button("Resume draft", on_click=_resume_draft, args=(draft_id,))
+        confirmed = st.checkbox(
+            "Delete the selected saved copy permanently (not any saved assessment).",
+            key="discard_draft_confirm",
+        )
+        st.button("Discard saved draft", disabled=not confirmed, on_click=_discard_draft, args=(draft_id,))
 
 
 def _demo():
@@ -108,6 +159,8 @@ def _demo_controls():
                 st.session_state.intake_choice = path
                 st.session_state.page = "Welcome"
                 st.session_state.draft = _empty_draft()
+                st.session_state.active_draft_id = None
+                st.session_state.draft_storage_authorized = False
                 st.session_state.step = 0
                 st.session_state.suggestions = []
                 st.session_state.discovery_prompts = {}
@@ -125,6 +178,8 @@ def _demo_controls():
                 st.session_state.intake_choice = None
                 st.session_state.page = "Welcome"
                 st.session_state.draft = _empty_draft()
+                st.session_state.active_draft_id = None
+                st.session_state.draft_storage_authorized = False
                 st.session_state.suggestions = []
                 st.session_state.discovery_prompts = {}
                 st.session_state.saved_exchanges = set()
@@ -322,17 +377,20 @@ def _render_discovery_step(index: int):
                 "Department",
                 DEPARTMENTS,
                 index=DEPARTMENTS.index(draft.get("department", "Other")),
+                key="step_0_department",
             )
-            values["role"] = st.text_input("Role", value=draft.get("role", ""), max_chars=MAX_INPUT_CHARS)
+            values["role"] = st.text_input("Role", value=draft.get("role", ""), max_chars=MAX_INPUT_CHARS, key="step_0_role")
             values["problem_scale"] = st.selectbox(
                 "Current problem scale",
                 SCALES,
-                index=SCALES.index(_demo().get("problem_scale", draft.get("problem_scale", "Individual"))),
+                index=SCALES.index(draft.get("problem_scale", "Individual")),
+                key="step_0_problem_scale",
             )
             values["rollout_scale"] = st.selectbox(
                 "Intended rollout scale",
                 SCALES,
-                index=SCALES.index(_demo().get("rollout_scale", draft.get("rollout_scale", "Department"))),
+                index=SCALES.index(draft.get("rollout_scale", "Department")),
+                key="step_0_rollout_scale",
             )
         for key, label, placeholder in question["fields"]:
             values[key] = st.text_area(
@@ -348,6 +406,25 @@ def _render_discovery_step(index: int):
             type="primary",
             use_container_width=True,
         )
+        save_draft = st.form_submit_button(
+            "Save draft for later",
+            disabled=not st.session_state.draft_storage_authorized,
+            use_container_width=True,
+        )
+    if save_draft:
+        draft.update(values)
+        try:
+            st.session_state.active_draft_id = save_discovery_draft(
+                draft, index, st.session_state.saved_exchanges,
+                st.session_state.demo_path, st.session_state.active_draft_id,
+            )
+            st.success(
+                f"Draft #{st.session_state.active_draft_id} saved, including this exchange's "
+                "current fields. Resume it from the sidebar after a refresh. "
+                "Later edits are not saved automatically."
+            )
+        except (sqlite3.Error, ValueError) as error:
+            st.error(f"Draft was not saved: {error}")
     if submitted:
         draft.update(values)
         st.session_state.draft = draft
@@ -360,6 +437,16 @@ def _discovery():
     st.title("Discovery Studio")
     st.caption("Six short exchanges to understand the work before considering technology.")
     st.warning("Keep descriptions high-level. Do not include confidential, personal, or client-sensitive information.")
+    st.checkbox(
+        "I confirm this draft contains only fictional or authorized non-sensitive information "
+        "and may be saved in shared prototype storage.",
+        key="draft_storage_authorized",
+    )
+    st.caption(
+        "Save draft for later stores the current fields and exchange progress locally. "
+        "Save exchange and continue only updates this session; save the draft again to retain later changes. "
+        "AI permissions and generated questions are not stored."
+    )
     with st.expander("Optional AI discovery", expanded=False):
         st.write(
             f"AI uses OpenAI {AI_MODEL} through Replit AI Integrations to select a follow-up "
@@ -548,6 +635,11 @@ with st.sidebar:
         on_change=_navigate,
     )
     st.markdown("---")
+    _draft_controls()
+    if st.session_state.get("draft_notice"):
+        st.success(st.session_state.pop("draft_notice"))
+    if st.session_state.get("draft_error"):
+        st.error(st.session_state.pop("draft_error"))
     st.checkbox(
         "My inputs for AI suggestions and explanations are fictional or authorized and non-sensitive.",
         key="ai_enrichment_authorized",

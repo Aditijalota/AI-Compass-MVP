@@ -19,6 +19,34 @@ python main.py
 3. Review the recommended pattern, alternatives, missing information, readiness concerns, and next steps.
 4. Open **Opportunity Dashboard** to search and reopen saved assessments. Three fictional assessments are seeded on first run.
 
+## Save and resume unfinished discovery
+
+In Discovery Studio, confirm that the draft is fictional or authorized non-sensitive
+information suitable for shared prototype storage, then choose **Save draft for later**
+inside the exchange form. This saves all previously submitted answers, the fields
+currently typed in that exchange, the exchange position, and completed-exchange progress
+to the existing local SQLite database. Saving a draft does not mark an unfinished
+exchange complete. Later edits are not saved automatically: save the draft again
+to update its saved copy. **Save exchange and continue** only updates the current session.
+
+After a refresh or lost session, open **Resume or discard a saved draft** in the
+sidebar, select the draft number and saved time, and choose **Resume draft**.
+Resume replaces the current discovery; save it first if needed. All AI toggles,
+AI consent, and draft-storage confirmation reset on resume. Model-generated
+questions are not stored. Guided discovery resumes without a model request;
+each AI feature needs fresh opt-in and non-sensitive-input confirmation.
+
+To remove a saved copy, select it, confirm permanent deletion, and choose
+**Discard saved draft**. This does not delete saved assessments or clear the
+answers currently open in the session. Starting a new discovery creates a new
+draft on the next explicit save; saving a resumed draft updates that saved copy.
+
+Drafts use the same local prototype SQLite database as assessments. They are
+not private, account-scoped, encrypted user records: anyone with access to this
+app can resume or delete them. Do not save personal data, client-sensitive
+information, or confidential business details. Local storage is not a production
+backup or a guarantee of retention after a deployment or environment replacement.
+
 ## Compare readiness and effort savings
 
 Reopen a saved assessment and expand **Edit readiness and effort assumptions**. Enter

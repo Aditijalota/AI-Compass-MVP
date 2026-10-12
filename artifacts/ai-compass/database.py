@@ -7,6 +7,7 @@ from pathlib import Path
 
 from classification import classify
 from classification import effort_input_issues
+from draft_state import snapshot
 
 DB_PATH = Path(__file__).parent / "data" / "ai_compass.db"
 
@@ -80,6 +81,16 @@ def _connect():
 
 def initialize_database():
     with _connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS discovery_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                payload TEXT NOT NULL
+            )
+            """
+        )
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS assessments (
@@ -163,6 +174,50 @@ def get_assessment(assessment_id: int) -> dict | None:
     item = json.loads(row["payload"])
     item["id"] = row["id"]
     return item
+
+
+def save_discovery_draft(draft, step, saved_exchanges, demo_path=None, draft_id=None):
+    payload = json.dumps(snapshot(draft, step, saved_exchanges, demo_path), ensure_ascii=False)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _connect() as connection:
+        if draft_id is None:
+            cursor = connection.execute(
+                "INSERT INTO discovery_drafts (created_at, updated_at, payload) VALUES (?, ?, ?)",
+                (now, now, payload),
+            )
+            return int(cursor.lastrowid)
+        cursor = connection.execute(
+            "UPDATE discovery_drafts SET updated_at = ?, payload = ? WHERE id = ?",
+            (now, payload, draft_id),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("This saved draft no longer exists. Resume another or start a new discovery.")
+    return draft_id
+
+
+def list_discovery_drafts():
+    with _connect() as connection:
+        rows = connection.execute(
+            "SELECT id, updated_at FROM discovery_drafts ORDER BY updated_at DESC, id DESC"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_discovery_draft(draft_id):
+    with _connect() as connection:
+        row = connection.execute(
+            "SELECT id, payload FROM discovery_drafts WHERE id = ?", (draft_id,)
+        ).fetchone()
+    if row is None:
+        raise ValueError("This saved draft no longer exists.")
+    result = json.loads(row["payload"])
+    result["id"] = row["id"]
+    return result
+
+
+def discard_discovery_draft(draft_id):
+    with _connect() as connection:
+        connection.execute("DELETE FROM discovery_drafts WHERE id = ?", (draft_id,))
 
 
 def update_effort_assumptions(assessment_id: int, assumptions: dict) -> None:
