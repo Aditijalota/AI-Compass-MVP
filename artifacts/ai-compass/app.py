@@ -1,19 +1,19 @@
 """AI Compass: a small, explainable AI opportunity discovery prototype."""
 
 from datetime import datetime, timezone
-import hashlib
-import json
 
 import pandas as pd
 import streamlit as st
 
 from classification import classify
 from database import get_assessment, initialize_database, list_assessments, save_assessment
-from discovery import DEPARTMENTS, QUESTIONS, SCALES, suggested_opportunities
 from demo_examples import DEMOS
-from llm_demo import AIUnavailable, MODEL, configured, opportunities, next_question, assessment_insight
+from llm_demo import AIUnavailable, MODEL, configured, opportunities, assessment_insight
 from reports import assessment_as_json, assessment_as_text
-
+from discovery import (
+    AI_MODEL, DEPARTMENTS, MAX_INPUT_CHARS, QUESTIONS, SCALES,
+    ai_available, discovery_prompt, prompt_cache_key, suggested_opportunities,
+)
 
 st.set_page_config(page_title="AI Compass", layout="wide")
 
@@ -49,7 +49,8 @@ def _initialize_state():
         "suggestions": [],
         "assessment_id": None,
         "assessment": None,
-        "ai_questions": {},
+        "discovery_prompts": {},
+        "saved_exchanges": set(),
         "demo_path": None,
     }
     for key, value in defaults.items():
@@ -71,7 +72,11 @@ def _begin_discovery(path: str, department: str, role: str, problem: str = "", a
     st.session_state.page = "Discovery Studio"
     st.session_state.assessment = None
     st.session_state.assessment_id = None
-    st.session_state.ai_questions = {}
+    st.session_state.discovery_prompts = {}
+    st.session_state.saved_exchanges = set()
+    # Consent and model use never carry over to a new discovery.
+    st.session_state.ai_discovery = False
+    st.session_state.ai_authorized = False
     st.rerun()
 
 
@@ -80,7 +85,7 @@ def _demo():
 
 
 def _opportunities(department, role, responsibilities=""):
-    if not st.session_state.use_ai:
+    if not (st.session_state.use_ai and st.session_state.ai_enrichment_authorized):
         return suggested_opportunities(department, role, responsibilities)
     try:
         with st.spinner("AI is finding three starting points for your context…"):
@@ -92,7 +97,7 @@ def _opportunities(department, role, responsibilities=""):
 
 def _demo_controls():
     with st.expander("Fictional demos for recording"):
-        st.caption("Load an example, then submit each exchange to show the live AI adapting. All values remain editable.")
+        st.caption("Load an example, then submit each exchange. All values remain editable; enable optional AI to show model-selected follow-ups.")
         for path, example in DEMOS.items():
             if st.button(f"Load: {example['name']}", key=f"load_demo_{path}"):
                 for key in list(st.session_state):
@@ -104,7 +109,10 @@ def _demo_controls():
                 st.session_state.draft = _empty_draft()
                 st.session_state.step = 0
                 st.session_state.suggestions = []
-                st.session_state.ai_questions = {}
+                st.session_state.discovery_prompts = {}
+                st.session_state.saved_exchanges = set()
+                st.session_state.ai_discovery = False
+                st.session_state.ai_authorized = False
                 st.session_state.assessment = None
                 st.session_state.assessment_id = None
                 st.session_state.responsibilities = ""
@@ -117,7 +125,10 @@ def _demo_controls():
                 st.session_state.page = "Welcome"
                 st.session_state.draft = _empty_draft()
                 st.session_state.suggestions = []
-                st.session_state.ai_questions = {}
+                st.session_state.discovery_prompts = {}
+                st.session_state.saved_exchanges = set()
+                st.session_state.ai_discovery = False
+                st.session_state.ai_authorized = False
                 st.session_state.assessment = None
                 st.session_state.assessment_id = None
                 for key in list(st.session_state):
@@ -184,7 +195,7 @@ def _welcome():
     if not path:
         st.markdown("---")
         st.markdown("#### What happens next")
-        st.write("Six AI-tailored discovery exchanges, a transparent fit assessment with an AI explanation, and saved opportunities.")
+        st.write("Six answer-aware discovery exchanges, a transparent rules-based assessment, optional AI assistance, and saved opportunities.")
         return
 
     st.markdown("---")
@@ -201,12 +212,13 @@ def _welcome():
     if path == "problem":
         with st.form("business_problem_intake"):
             department = st.selectbox("Department", DEPARTMENTS, index=DEPARTMENTS.index(_demo().get("department", "Finance")))
-            role = st.text_input("Your role (optional)", value=_demo().get("role", ""))
+            role = st.text_input("Your role (optional)", value=_demo().get("role", ""), max_chars=MAX_INPUT_CHARS)
             problem = st.text_area(
                 "What problem or inefficient process would you like to improve?",
                 value=_demo().get("business_problem", ""),
                 placeholder="Keep it high-level; use fictional or non-sensitive details.",
                 height=120,
+                max_chars=MAX_INPUT_CHARS,
             )
             submitted = st.form_submit_button("Continue to discovery", type="primary")
         if submitted:
@@ -218,7 +230,7 @@ def _welcome():
     elif path == "explore":
         with st.form("department_intake"):
             department = st.selectbox("Department", DEPARTMENTS, index=DEPARTMENTS.index(_demo().get("department", "Finance")))
-            role = st.text_input("Role (optional)", value=_demo().get("role", ""))
+            role = st.text_input("Role (optional)", value=_demo().get("role", ""), max_chars=MAX_INPUT_CHARS)
             submitted = st.form_submit_button("Show three opportunities", type="primary")
         if submitted:
             st.session_state.selected_department = department
@@ -234,12 +246,13 @@ def _welcome():
     else:
         with st.form("new_to_ai_intake"):
             department = st.selectbox("Department", DEPARTMENTS, index=DEPARTMENTS.index(_demo().get("department", "Finance")))
-            role = st.text_input("Your role", value=_demo().get("role", ""))
+            role = st.text_input("Your role", value=_demo().get("role", ""), max_chars=MAX_INPUT_CHARS)
             responsibilities = st.text_area(
                 "What do you spend time doing in a typical week?",
                 value=_demo().get("activities", ""),
                 placeholder="For example: review requests, prepare reports, answer recurring questions.",
                 height=120,
+                max_chars=MAX_INPUT_CHARS,
             )
             submitted = st.form_submit_button("Suggest starting points", type="primary")
         if submitted:
@@ -267,7 +280,7 @@ def _save_preliminary_assessment():
     )
     payload = assessment.to_dict()
     payload["is_example"] = bool(st.session_state.demo_path)
-    if st.session_state.use_ai:
+    if st.session_state.use_ai and st.session_state.ai_enrichment_authorized:
         try:
             with st.spinner("AI is explaining your solution fit and drafting a bounded pilot plan…"):
                 payload["ai_insight"] = assessment_insight(payload)
@@ -286,37 +299,21 @@ def _render_discovery_step(index: int):
     question = QUESTIONS[index]
     draft = st.session_state.draft
     st.markdown(f"### Exchange {index + 1} of {len(QUESTIONS)} · {question['title']}")
-    prompt = question["prompt"]
-    if index == 0 and draft.get("department"):
-        role_context = f" for a {draft['role']}" if draft.get("role") else ""
-        prompt = f"Starting with {draft['department']}{role_context}: {prompt[0].lower() + prompt[1:]}"
-    elif index == 1 and draft.get("business_problem"):
-        prompt = f"For “{draft['business_problem'][:100]}”, {prompt[0].lower() + prompt[1:]}"
-    if st.session_state.use_ai:
-        fingerprint = hashlib.sha256(json.dumps(
-            {"draft": draft, "index": index}, sort_keys=True
-        ).encode()).hexdigest()
-        cache = st.session_state.ai_questions
-        if fingerprint not in cache:
-            try:
-                with st.spinner("AI is adapting the next question to your answers…"):
-                    cache[fingerprint] = next_question(draft, question, index)
-            except AIUnavailable as error:
-                cache[fingerprint] = {"error": str(error)}
-        generated = cache[fingerprint]
-        if generated.get("error"):
-            st.error(generated["error"])
-            st.caption("Showing the standard question below. This exchange is not AI-generated.")
-            if st.button("Retry AI question", key=f"retry_ai_{index}"):
-                del cache[fingerprint]
-                st.rerun()
-        else:
-            prompt = generated["prompt"]
-            summary = generated.get("context_summary")
-            if isinstance(summary, str) and summary:
-                st.caption(summary)
-            st.caption(f"AI-generated follow-up · {MODEL}")
-    st.write(prompt)
+    use_ai = st.session_state.get("ai_discovery", False)
+    authorized = st.session_state.get("ai_authorized", False)
+    cache_key = prompt_cache_key(index, draft, use_ai, authorized)
+    cache = st.session_state.discovery_prompts
+    if cache_key not in cache:
+        with st.spinner("Preparing the next question…"):
+            cache[cache_key] = discovery_prompt(index, draft, use_ai=use_ai, authorized=authorized)
+    prompt = cache[cache_key]
+    st.caption(
+        f"AI-selected follow-up · OpenAI {AI_MODEL} via Replit AI Integrations"
+        if prompt.source == "ai" else "Answer-aware guided follow-up · no model used for this question"
+    )
+    if prompt.notice:
+        st.warning(prompt.notice)
+    st.write(prompt.text)
     with st.form(f"discovery_step_{index}"):
         values = {}
         if index == 0:
@@ -325,7 +322,7 @@ def _render_discovery_step(index: int):
                 DEPARTMENTS,
                 index=DEPARTMENTS.index(draft.get("department", "Other")),
             )
-            values["role"] = st.text_input("Role", value=draft.get("role", ""))
+            values["role"] = st.text_input("Role", value=draft.get("role", ""), max_chars=MAX_INPUT_CHARS)
             values["problem_scale"] = st.selectbox(
                 "Current problem scale",
                 SCALES,
@@ -343,6 +340,7 @@ def _render_discovery_step(index: int):
                 placeholder=placeholder,
                 height=90,
                 key=f"step_{index}_{key}",
+                max_chars=MAX_INPUT_CHARS,
             )
         submitted = st.form_submit_button(
             "Save exchange and continue" if index < len(QUESTIONS) - 1 else "Save final exchange",
@@ -352,6 +350,7 @@ def _render_discovery_step(index: int):
     if submitted:
         draft.update(values)
         st.session_state.draft = draft
+        st.session_state.saved_exchanges.add(index)
         st.session_state.step = min(index + 1, len(QUESTIONS) - 1)
         st.rerun()
 
@@ -360,6 +359,25 @@ def _discovery():
     st.title("Discovery Studio")
     st.caption("Six short exchanges to understand the work before considering technology.")
     st.warning("Keep descriptions high-level. Do not include confidential, personal, or client-sensitive information.")
+    with st.expander("Optional AI discovery", expanded=False):
+        st.write(
+            f"AI uses OpenAI {AI_MODEL} through Replit AI Integrations to select a follow-up "
+            "from a reviewed set for each exchange. No API key is required; usage is billed "
+            "to Replit credits. Only high-level saved intake and prior answers (up to 600 "
+            "characters per field) are sent to the model when you opt in. "
+            "Questions are kept in this session, not saved with the assessment. "
+            "AI never changes the rules-based classifier or connects to business systems."
+        )
+        if not ai_available():
+            st.info("Replit AI Integrations is not configured here. Guided discovery remains fully available.")
+        st.checkbox(
+            "I confirm my saved inputs are fictional or authorized non-sensitive information.",
+            key="ai_authorized",
+        )
+        st.toggle("Use AI to select follow-up questions", key="ai_discovery")
+    st.caption("Guided mode works without an LLM. You can turn AI off at any time; your answers are preserved.")
+    if len(st.session_state.saved_exchanges) == len(QUESTIONS):
+        st.success("All six exchanges are saved. Generate your preliminary assessment below.")
     progress = (st.session_state.step + 1) / len(QUESTIONS)
     st.progress(progress, text=f"Exchange {st.session_state.step + 1} of {len(QUESTIONS)}")
     _render_discovery_step(st.session_state.step)
@@ -527,15 +545,22 @@ with st.sidebar:
         on_change=_navigate,
     )
     st.markdown("---")
-    st.toggle("Use LLM-powered discovery", value=True, key="use_ai")
-    if st.session_state.use_ai:
+    st.checkbox(
+        "My inputs for AI suggestions and explanations are fictional or authorized and non-sensitive.",
+        key="ai_enrichment_authorized",
+    )
+    st.toggle("Use AI opportunities and assessment explanations", value=False, key="use_ai")
+    st.caption("Discovery follow-up AI is enabled separately in Discovery Studio.")
+    if st.session_state.use_ai and st.session_state.ai_enrichment_authorized:
         if configured():
             st.caption(f"AI enabled · OpenAI {MODEL}")
             st.caption("AI usage is billed to Replit credits. Submit only fictional or authorized non-sensitive descriptions.")
         else:
             st.error("AI access is not configured.")
     else:
-        st.caption("Guided mode · local questions and rules; no LLM calls.")
+        st.caption("Local opportunity suggestions and rules-based assessment. No model used for these features.")
+        if st.session_state.use_ai:
+            st.info("Confirm non-sensitive inputs above before AI suggestions or assessment explanations can be used.")
     st.caption("No external business-system connections. No autonomous actions.")
     _demo_controls()
 

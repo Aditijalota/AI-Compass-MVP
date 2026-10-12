@@ -1,1 +1,2 @@
 - [Streamlit startup and routing](streamlit-startup.md) — onboarding can block startup; a running standalone workflow may still lack a shared-preview route.
+- [AI provisioning availability](ai-provisioning.md) — a missing setup action in a task runtime is not evidence that managed AI access is unavailable platform-wide.

@@ -8,6 +8,7 @@ AI Compass is a Streamlit prototype that helps individuals, managers, business o
 - Python packages: `artifacts/ai-compass/requirements.txt`
 - Local prototype storage: `artifacts/ai-compass/data/ai_compass.db` (SQLite, created on first run)
 - Live AI discovery uses Replit-managed OpenAI configuration; no personal API key or `DATABASE_URL` is required. AI usage is billed to Replit credits.
+- Optional discovery requires explicit opt-in and non-sensitive-input confirmation; guided discovery and classification remain fully local. See the app README for availability and test instructions.
 - Existing workspace tooling: `pnpm run typecheck`
 
 ## Stack
@@ -27,7 +28,7 @@ AI Compass is a Streamlit prototype that helps individuals, managers, business o
 ## Architecture decisions
 
 - The MVP follows the requested Python/Streamlit stack and keeps UI, discovery, classification, persistence, and reporting in separate modules.
-- Live AI discovery is enabled by default for demos; recommendations retain local, deterministic rules as their authority. An LLM supplies opportunities, adaptive questions, and an explicitly labeled interpretation.
+- Guided mode is the default, including fictional demos. Optional AI selects bounded discovery questions; separate opt-in AI features supply opportunities and an explicitly labeled assessment interpretation. Local deterministic rules remain the authority for recommendations.
 - SQLite is local prototype storage and should not be treated as a multi-user production database.
 - Fictional sample records are included; users should not enter confidential or personal data.
 
