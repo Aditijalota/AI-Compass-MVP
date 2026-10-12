@@ -135,7 +135,7 @@ def _save(connection, assessment: dict, is_example: bool = False) -> int:
 
 def save_assessment(assessment: dict) -> int:
     with _connect() as connection:
-        return _save(connection, assessment)
+        return _save(connection, assessment, is_example=bool(assessment.get("is_example", False)))
 
 
 def list_assessments() -> list[dict]:

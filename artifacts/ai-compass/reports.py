@@ -14,6 +14,13 @@ def assessment_as_text(assessment: dict) -> str:
         ("Readiness concerns", assessment.get("readiness_concerns", [])),
         ("Recommended next steps", assessment.get("next_steps", [])),
     ]
+    insight = assessment.get("ai_insight")
+    if insight:
+        sections.extend([
+            ("AI interpretation", insight["summary"]),
+            ("AI-proposed pilot plan", insight["pilot_plan"]),
+            ("AI model", insight["model"]),
+        ])
     output = []
     for heading, content in sections:
         output.append(f"{heading}\n" + ("-" * len(heading)))
