@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "fECpf6sI40S3nzxhRzJgN"
+uri = "file://artifacts/ai-compass-overview/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"
+description = "Generated music: Ambient electronic instrumental scoring a calm, intelligent product overview. Soft analog synth pulse, plucked marimba arpeggios, warm pads, light kick, 100 BPM, curious and confiden…"
