@@ -19,6 +19,41 @@ python main.py
 3. Review the recommended pattern, alternatives, missing information, readiness concerns, and next steps.
 4. Open **Opportunity Dashboard** to search and reopen saved assessments. Three fictional assessments are seeded on first run.
 
+## Compare readiness and effort savings
+
+Reopen a saved assessment and expand **Edit readiness and effort assumptions**. Enter
+lower/upper ranges for baseline weekly person-hours, potential effort reduction,
+expected adoption, additional weekly review/maintenance, and one-time implementation
+person-hours. State the baseline scope/evidence and implementation dependencies.
+Unknown inputs remain blank; zero is an explicit assumption. Discovery free text and
+fictional examples never supply assumed numeric values.
+
+Report readiness separately for process ownership, process/success-measure clarity,
+approved data/tools, and human review/fallback. Choose **Not confirmed**, **Needs work**,
+or **Confirmed** for each. These are self-reported prerequisites, not a readiness score
+or authorization to implement.
+
+Check the confirmation box when submitting complete assumptions to see a preliminary
+range. You can save incomplete drafts, but missing or unconfirmed effort assumptions
+prevent a savings estimate. Every edit requires fresh confirmation. Saved assumptions
+persist in the existing SQLite assessment payload; no schema migration or external
+connection is required. Existing saved assessments remain usable and show missing inputs.
+
+Weekly net effort saved = baseline × reduction × adoption − additional review/maintenance.
+The lower bound uses low baseline/reduction/adoption and high overhead; the upper uses
+high baseline/reduction/adoption and low overhead. Implementation effort is one-time and
+shown separately, not subtracted from a recurring week. Percentages apply to the same
+baseline scope, with no automatic rollout/headcount multiplication.
+
+Use **Compare readiness and effort savings** on the dashboard to compare any of the
+search-visible opportunities. The table shows readiness, weekly net ranges, implementation
+effort, scope, missing inputs, and fictional-example labels. Reopen a record to change its
+assumptions. Negative savings mean extra work. Overlapping workloads must not be summed;
+different scopes are not directly comparable. These are scenarios, not confidence intervals,
+monetary ROI, payback promises, or measured outcomes. Validate quality and effort in a pilot.
+Both readable and JSON assessment exports include the assumptions, readiness checks,
+calculation method, missing inputs, and caveats.
+
 
 ## Optional conversational discovery
 

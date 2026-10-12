@@ -10,6 +10,7 @@ from database import get_assessment, initialize_database, list_assessments, save
 from demo_examples import DEMOS
 from llm_demo import AIUnavailable, MODEL, configured, opportunities, assessment_insight
 from reports import assessment_as_json, assessment_as_text
+from comparison_ui import render_comparison, render_effort_assumptions
 from discovery import (
     AI_MODEL, DEPARTMENTS, MAX_INPUT_CHARS, QUESTIONS, SCALES,
     ai_available, discovery_prompt, prompt_cache_key, suggested_opportunities,
@@ -440,6 +441,7 @@ def _assessment_detail(assessment: dict):
         _bullet_section("Missing information", assessment.get("missing_information", []))
         _bullet_section("Readiness concerns", assessment.get("readiness_concerns", []))
     _bullet_section("Recommended next steps", assessment.get("next_steps", []))
+    render_effort_assumptions(assessment)
     st.markdown("---")
     st.caption("Validate with process owners before making technical, operational, or investment decisions.")
     text_col, json_col = st.columns(2)
@@ -517,6 +519,7 @@ def _dashboard():
         f"#{row['ID']} · {row['Opportunity']} — {row['Recommended solution']}": int(row["ID"])
         for _, row in visible.iterrows()
     }
+    render_comparison([item for item in assessments if item["id"] in set(options.values())])
     selected_label = st.selectbox("Choose an assessment to reopen", list(options))
     if st.button("Reopen assessment", type="primary"):
         st.session_state.assessment_id = options[selected_label]

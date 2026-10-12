@@ -1,6 +1,121 @@
 """Explainable rules for matching a process to a proportionate solution."""
 
-from models import Assessment
+import math
+
+from models import Assessment, EFFORT_RANGES, READINESS_CHECKS, READINESS_STATES
+
+
+ESTIMATE_METHOD = (
+    "Weekly net person-hours saved = baseline person-hours/week × potential effort "
+    "reduction (%) × expected adoption (%) − additional weekly review/maintenance hours. "
+    "Lower bound uses low baseline, reduction, adoption and high overhead; upper bound "
+    "uses high baseline, reduction, adoption and low overhead. Implementation hours are "
+    "one-time and excluded from recurring savings. No rollout multiplier, monetary ROI, "
+    "or payback promise is applied."
+)
+ESTIMATE_CAVEAT = (
+    "Preliminary scenario range based on user-confirmed assumptions, not measured results "
+    "or a statistical confidence interval. Negative savings mean additional effort. "
+    "Review/maintenance is additional to the baseline and applies to the same scope, "
+    "after expected adoption. Validate workload, quality, adoption, and overhead in a pilot."
+)
+
+
+def effort_input_issues(assumptions: dict) -> tuple[list[str], list[str]]:
+    """Allow incomplete drafts, but reject invalid numeric ranges and readiness states."""
+    missing, errors = [], []
+    for key, (label, maximum) in EFFORT_RANGES.items():
+        values = assumptions.get(key, [None, None])
+        if not isinstance(values, (list, tuple)) or len(values) != 2:
+            errors.append(f"{label}: provide a lower and upper value.")
+            continue
+        valid = True
+        for value in values:
+            if value is None:
+                continue
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value) or value < 0
+                    or (maximum is not None and value > maximum)):
+                errors.append(f"{label}: values must be finite, non-negative"
+                              + (" and at most 100%." if maximum else "."))
+                valid = False
+                break
+        if None in values:
+            missing.append(label)
+        elif valid and values[0] > values[1]:
+            errors.append(f"{label}: lower value cannot exceed upper value.")
+    for key, label in (
+        ("scope", "Baseline scope and evidence"),
+        ("implementation_notes", "Implementation assumptions and dependencies"),
+    ):
+        value = assumptions.get(key, "")
+        if not isinstance(value, str):
+            errors.append(f"{label}: provide text.")
+        elif not value.strip():
+            missing.append(label)
+    readiness = assumptions.get("readiness", {})
+    if not isinstance(readiness, dict):
+        errors.append("Readiness checks must be a mapping.")
+    else:
+        for key, label in READINESS_CHECKS.items():
+            state = readiness.get(key, "Not confirmed")
+            if state not in READINESS_STATES:
+                errors.append(f"{label}: invalid readiness state.")
+            elif state == "Not confirmed":
+                missing.append(label)
+    if assumptions.get("confirmed") is not True:
+        missing.append("User confirmation of these assumptions")
+    return missing, errors
+
+
+def estimate_opportunity(assessment: dict) -> dict:
+    """Derive comparable, conservative ranges without parsing discovery free text."""
+    assumptions = assessment.get("effort_assumptions") or {}
+    missing, errors = effort_input_issues(assumptions)
+    readiness = assumptions.get("readiness", {})
+    checks = [
+        {"check": label, "status": readiness.get(key, "Not confirmed")}
+        for key, label in READINESS_CHECKS.items()
+    ] if isinstance(readiness, dict) else []
+    if any(check["status"] == "Needs work" for check in checks):
+        status = "Needs preparation"
+    elif len(checks) != len(READINESS_CHECKS) or any(
+        check["status"] != "Confirmed" for check in checks
+    ):
+        status = "Readiness unconfirmed"
+    else:
+        status = "Pilot prerequisites reported confirmed"
+    result = {
+        "status": "Preliminary",
+        "readiness": status,
+        "readiness_checks": checks,
+        "missing_inputs": missing,
+        "input_errors": errors,
+        "net_hours_per_week": None,
+        "gross_hours_per_week": None,
+        "implementation_hours": None,
+        "method": ESTIMATE_METHOD,
+        "caveat": ESTIMATE_CAVEAT,
+    }
+    # Readiness checks may remain unknown; disclose them without inventing a score.
+    effort_missing = [item for item in missing if item not in READINESS_CHECKS.values()]
+    if effort_missing or errors:
+        return result
+    baseline = assumptions["baseline_hours"]
+    reduction = assumptions["reduction_percent"]
+    adoption = assumptions["adoption_percent"]
+    review = assumptions["review_hours"]
+    gross = [baseline[i] * (reduction[i] / 100) * (adoption[i] / 100) for i in (0, 1)]
+    net = [gross[0] - review[1], gross[1] - review[0]]
+    if not all(math.isfinite(value) for value in gross + net):
+        result["input_errors"].append("The supplied values are too large to calculate a finite range.")
+        return result
+    result.update(
+        gross_hours_per_week=gross,
+        net_hours_per_week=net,
+        implementation_hours=assumptions["implementation_hours"],
+    )
+    return result
 
 
 def _contains(text: str, phrases: tuple[str, ...]) -> bool:

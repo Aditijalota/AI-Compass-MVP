@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from classification import classify
+from classification import effort_input_issues
 
 DB_PATH = Path(__file__).parent / "data" / "ai_compass.db"
 
@@ -162,4 +163,28 @@ def get_assessment(assessment_id: int) -> dict | None:
     item = json.loads(row["payload"])
     item["id"] = row["id"]
     return item
+
+
+def update_effort_assumptions(assessment_id: int, assumptions: dict) -> None:
+    """Update only estimate assumptions; preserve discovery, examples, and AI insight."""
+    _, errors = effort_input_issues(assumptions)
+    if errors:
+        raise ValueError(" ".join(errors))
+    stored = assumptions.copy()
+    stored["confirmed_at"] = (
+        datetime.now(timezone.utc).isoformat()
+        if stored.get("confirmed") is True else None
+    )
+    with _connect() as connection:
+        row = connection.execute(
+            "SELECT payload FROM assessments WHERE id = ?", (assessment_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Assessment no longer exists.")
+        payload = json.loads(row["payload"])
+        payload["effort_assumptions"] = stored
+        connection.execute(
+            "UPDATE assessments SET payload = ? WHERE id = ?",
+            (json.dumps(payload, ensure_ascii=False), assessment_id),
+        )
 
