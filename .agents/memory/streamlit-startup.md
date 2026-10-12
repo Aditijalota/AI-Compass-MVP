@@ -15,8 +15,8 @@ A standalone webview workflow does not necessarily register a root route in a pa
 
 **How to apply:** Confirm the app through the shared preview proxy, not just its local port. Register its managed service and WebSocket path using validated artifact configuration when the proxy has no route.
 
-Managed artifact service commands run from the artifact directory, not necessarily the workspace root.
+Development artifact service commands run from the artifact directory; publishing build and run commands run from the workspace root.
 
-**Why:** A root-relative launcher command attempted to open a nonexistent file under the artifact directory.
+**Why:** Development initially looked for a root launcher under the artifact directory. Reusing the development directory change in production then made publishing look outside the project for its Python manifest.
 
-**How to apply:** Use a launcher with explicit paths or change to the workspace root when a service needs root-level files.
+**How to apply:** Treat development and production working directories separately. Verify publishing commands from the workspace root rather than assuming a working preview proves those commands are correct.
