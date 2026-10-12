@@ -215,11 +215,10 @@ def _show_opportunity_choices(opportunities, responsibilities=""):
 
 def _welcome():
     st.title("AI Compass")
-    st.subheader("Find the right-sized solution to a real work problem.")
+    st.subheader("Discover where AI can create value in your business.")
     st.write(
-        "Describe a process, explore opportunities in a department, or start with your day-to-day work. "
-        "AI Compass guides you through discovery and explains why a simple process change, existing tool, "
-        "automation, or AI approach may fit."
+        "Explore AI opportunities, understand your business processes, and discover whether process improvement, "
+        "existing AI tools, automation, or custom AI solutions are the right fit for your needs."
     )
     st.info(
         "Prototype notice: use fictional or authorized non-sensitive information only. "
